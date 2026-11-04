@@ -5,7 +5,8 @@ export interface Study {
   team: TeamMember[];
   nodes: Node[];
   rows: Row[];
-  guidewords: Guideword[];
+  /** The study's own copy of the risk database. */
+  categories: RiskCategory[];
   matrix: RiskMatrix;
 }
 
@@ -40,7 +41,8 @@ export const STATUSES: Status[] = ["Open", "In progress", "Closed"];
 export interface Row {
   id: string;
   nodeId: string;
-  guideword: string;
+  /** Name of a hazardous scenario from the risk database. */
+  scenario: string;
   hazard: string;
   cause: string;
   consequence: string;
@@ -55,11 +57,16 @@ export interface Row {
   comments: string;
 }
 
-export interface Guideword {
+export interface RiskCategory {
   id: string;
-  category: string;
   name: string;
-  prompt: string;
+  scenarios: HazardousScenario[];
+}
+
+export interface HazardousScenario {
+  id: string;
+  name: string;
+  description: string;
 }
 
 export interface RiskMatrix {

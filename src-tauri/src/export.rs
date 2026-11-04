@@ -21,7 +21,7 @@ fn build(study: &Study) -> Result<Workbook, XlsxError> {
     wb.push_worksheet(worksheet_sheet(study)?);
     wb.push_worksheet(actions_sheet(study)?);
     wb.push_worksheet(matrix_sheet(study)?);
-    wb.push_worksheet(guidewords_sheet(study)?);
+    wb.push_worksheet(risk_database_sheet(study)?);
     Ok(wb)
 }
 
@@ -145,7 +145,7 @@ fn worksheet_sheet(study: &Study) -> Result<Worksheet, XlsxError> {
     ws.set_name("HAZID Worksheet")?;
     let cols = [
         ("Ref", 6.0),
-        ("Guideword", 18.0),
+        ("Hazardous scenario", 20.0),
         ("Hazard", 26.0),
         ("Cause", 30.0),
         ("Consequence", 30.0),
@@ -180,7 +180,7 @@ fn worksheet_sheet(study: &Study) -> Result<Worksheet, XlsxError> {
             let risk = m.class_of(row.likelihood, row.severity);
             let res = m.class_of(row.residual_likelihood, row.residual_severity);
             ws.write_string_with_format(r, 0, refs.get(&ri).map(String::as_str).unwrap_or(""), &f.center)?;
-            ws.write_string_with_format(r, 1, &row.guideword, &f.cell)?;
+            ws.write_string_with_format(r, 1, &row.scenario, &f.cell)?;
             ws.write_string_with_format(r, 2, &row.hazard, &f.cell)?;
             ws.write_string_with_format(r, 3, &row.cause, &f.cell)?;
             ws.write_string_with_format(r, 4, &row.consequence, &f.cell)?;
@@ -298,16 +298,19 @@ fn matrix_sheet(study: &Study) -> Result<Worksheet, XlsxError> {
     Ok(ws)
 }
 
-fn guidewords_sheet(study: &Study) -> Result<Worksheet, XlsxError> {
+fn risk_database_sheet(study: &Study) -> Result<Worksheet, XlsxError> {
     let f = Formats::new();
     let mut ws = Worksheet::new();
-    ws.set_name("Guidewords")?;
-    headers(&mut ws, 0, &[("Category", 26.0), ("Guideword", 32.0), ("Prompt", 70.0)], &f)?;
-    for (i, g) in study.guidewords.iter().enumerate() {
-        let r = i as u32 + 1;
-        ws.write_string_with_format(r, 0, &g.category, &f.cell)?;
-        ws.write_string_with_format(r, 1, &g.name, &f.cell)?;
-        ws.write_string_with_format(r, 2, &g.prompt, &f.cell)?;
+    ws.set_name("Risk Database")?;
+    headers(&mut ws, 0, &[("Category", 26.0), ("Hazardous scenario", 32.0), ("Description", 70.0)], &f)?;
+    let mut r = 0u32;
+    for c in &study.categories {
+        for sc in &c.scenarios {
+            r += 1;
+            ws.write_string_with_format(r, 0, &c.name, &f.cell)?;
+            ws.write_string_with_format(r, 1, &sc.name, &f.cell)?;
+            ws.write_string_with_format(r, 2, &sc.description, &f.cell)?;
+        }
     }
     ws.set_freeze_panes(1, 0)?;
     Ok(ws)

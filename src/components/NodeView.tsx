@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { newRow } from "../defaults";
 import { riskClass, rowRefs } from "../risk";
 import { STATUSES, type Node, type Row, type Study } from "../types";
@@ -8,10 +8,16 @@ interface Props {
   study: Study;
   node: Node;
   update: (fn: (s: Study) => Study) => void;
+  /** Row to scroll to and flash, e.g. when coming from the risk landscape. */
+  highlightId?: string;
 }
 
-export function NodeView({ study, node, update }: Props) {
-  const [showGuidewords, setShowGuidewords] = useState(true);
+export function NodeView({ study, node, update, highlightId }: Props) {
+  const [showChecklist, setShowChecklist] = useState(!highlightId);
+
+  useEffect(() => {
+    if (highlightId) document.getElementById(`row-${highlightId}`)?.scrollIntoView({ block: "center" });
+  }, [highlightId]);
   const rows = study.rows.filter((r) => r.nodeId === node.id);
   const refs = useMemo(() => rowRefs(study), [study]);
   const m = study.matrix;
@@ -22,9 +28,9 @@ export function NodeView({ study, node, update }: Props) {
   const setRow = (id: string, patch: Partial<Row>) =>
     update((s) => ({ ...s, rows: s.rows.map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
 
-  const addRow = (guideword = "", after?: string) =>
+  const addRow = (scenario = "", after?: string) =>
     update((s) => {
-      const row = newRow(node.id, guideword);
+      const row = newRow(node.id, scenario);
       if (!after) {
         // Append after the last row of this node so references stay grouped.
         const last = s.rows.map((r) => r.nodeId).lastIndexOf(node.id);
@@ -32,7 +38,7 @@ export function NodeView({ study, node, update }: Props) {
         return { ...s, rows: [...s.rows.slice(0, at), row, ...s.rows.slice(at)] };
       }
       const at = s.rows.findIndex((r) => r.id === after) + 1;
-      return { ...s, rows: [...s.rows.slice(0, at), { ...row, guideword: s.rows[at - 1].guideword }, ...s.rows.slice(at)] };
+      return { ...s, rows: [...s.rows.slice(0, at), { ...row, scenario: s.rows[at - 1].scenario }, ...s.rows.slice(at)] };
     });
 
   const removeRow = (id: string) => update((s) => ({ ...s, rows: s.rows.filter((r) => r.id !== id) }));
@@ -50,9 +56,9 @@ export function NodeView({ study, node, update }: Props) {
     });
 
   const usage = new Map<string, number>();
-  for (const r of rows) usage.set(r.guideword, (usage.get(r.guideword) ?? 0) + 1);
-  const categories = [...new Set(study.guidewords.map((g) => g.category))];
-  const covered = study.guidewords.filter((g) => usage.has(g.name)).length;
+  for (const r of rows) usage.set(r.scenario, (usage.get(r.scenario) ?? 0) + 1);
+  const allScenarios = study.categories.flatMap((c) => c.scenarios);
+  const covered = allScenarios.filter((sc) => usage.has(sc.name)).length;
 
   return (
     <div className="page wide">
@@ -72,32 +78,30 @@ export function NodeView({ study, node, update }: Props) {
         </div>
       </div>
 
-      <section className="guideword-panel">
-        <button className="panel-toggle" onClick={() => setShowGuidewords((v) => !v)}>
-          <span>{showGuidewords ? "▾" : "▸"} Guideword checklist</span>
+      <section className="checklist-panel">
+        <button className="panel-toggle" onClick={() => setShowChecklist((v) => !v)}>
+          <span>{showChecklist ? "▾" : "▸"} Hazardous scenario checklist</span>
           <span className="muted">
-            {covered} of {study.guidewords.length} addressed
+            {covered} of {allScenarios.length} addressed
           </span>
         </button>
-        {showGuidewords && (
-          <div className="guideword-groups">
-            {categories.map((cat) => (
-              <div key={cat} className="guideword-group">
-                <div className="guideword-cat">{cat}</div>
+        {showChecklist && (
+          <div className="checklist-groups">
+            {study.categories.map((cat) => (
+              <div key={cat.id} className="checklist-group">
+                <div className="checklist-cat">{cat.name}</div>
                 <div className="chips">
-                  {study.guidewords
-                    .filter((g) => g.category === cat)
-                    .map((g) => (
-                      <button
-                        key={g.id}
-                        className={`chip ${usage.has(g.name) ? "used" : ""}`}
-                        title={`${g.prompt}\n\nClick to add a scenario with this guideword.`}
-                        onClick={() => addRow(g.name)}
-                      >
-                        {g.name}
-                        {usage.has(g.name) && <span className="chip-count">{usage.get(g.name)}</span>}
-                      </button>
-                    ))}
+                  {cat.scenarios.map((sc) => (
+                    <button
+                      key={sc.id}
+                      className={`chip ${usage.has(sc.name) ? "used" : ""}`}
+                      title={`${sc.description}\n\nClick to add a row for this hazardous scenario.`}
+                      onClick={() => addRow(sc.name)}
+                    >
+                      {sc.name}
+                      {usage.has(sc.name) && <span className="chip-count">{usage.get(sc.name)}</span>}
+                    </button>
+                  ))}
                 </div>
               </div>
             ))}
@@ -110,7 +114,7 @@ export function NodeView({ study, node, update }: Props) {
           <thead>
             <tr>
               <th className="c-ref">Ref</th>
-              <th className="c-gw">Guideword</th>
+              <th className="c-gw">Hazardous scenario</th>
               <th>Hazard</th>
               <th>Cause</th>
               <th>Consequence</th>
@@ -130,24 +134,22 @@ export function NodeView({ study, node, update }: Props) {
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.id}>
+              <tr key={r.id} id={`row-${r.id}`} className={r.id === highlightId ? "highlight" : ""}>
                 <td className="c-ref ref">{refs.get(r.id)}</td>
                 <td className="c-gw">
-                  <select value={r.guideword} onChange={(e) => setRow(r.id, { guideword: e.target.value })}>
+                  <select value={r.scenario} onChange={(e) => setRow(r.id, { scenario: e.target.value })}>
                     <option value="">–</option>
-                    {categories.map((cat) => (
-                      <optgroup key={cat} label={cat}>
-                        {study.guidewords
-                          .filter((g) => g.category === cat)
-                          .map((g) => (
-                            <option key={g.id} value={g.name}>
-                              {g.name}
-                            </option>
-                          ))}
+                    {study.categories.map((cat) => (
+                      <optgroup key={cat.id} label={cat.name}>
+                        {cat.scenarios.map((sc) => (
+                          <option key={sc.id} value={sc.name}>
+                            {sc.name}
+                          </option>
+                        ))}
                       </optgroup>
                     ))}
-                    {r.guideword && !study.guidewords.some((g) => g.name === r.guideword) && (
-                      <option value={r.guideword}>{r.guideword}</option>
+                    {r.scenario && !allScenarios.some((sc) => sc.name === r.scenario) && (
+                      <option value={r.scenario}>{r.scenario}</option>
                     )}
                   </select>
                 </td>
@@ -182,19 +184,19 @@ export function NodeView({ study, node, update }: Props) {
                 <td className="c-tools row-tools">
                   <button className="icon-btn" title="Move up" disabled={i === 0} onClick={() => moveRow(r.id, -1)}>↑</button>
                   <button className="icon-btn" title="Move down" disabled={i === rows.length - 1} onClick={() => moveRow(r.id, 1)}>↓</button>
-                  <button className="icon-btn" title="Insert scenario below" onClick={() => addRow("", r.id)}>+</button>
-                  <button className="icon-btn danger" title="Delete scenario" onClick={() => removeRow(r.id)}>×</button>
+                  <button className="icon-btn" title="Insert row below" onClick={() => addRow("", r.id)}>+</button>
+                  <button className="icon-btn danger" title="Delete row" onClick={() => removeRow(r.id)}>×</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
         {rows.length === 0 && (
-          <p className="empty-note">No scenarios yet. Pick a guideword above or add a blank scenario.</p>
+          <p className="empty-note">No scenarios yet. Pick a hazardous scenario above or add a blank row.</p>
         )}
       </div>
       <button className="link-btn" onClick={() => addRow()}>
-        + Add scenario
+        + Add row
       </button>
     </div>
   );

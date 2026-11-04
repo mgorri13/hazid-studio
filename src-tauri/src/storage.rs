@@ -6,9 +6,11 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, params};
 
-use crate::model::{Guideword, Node, Row, Study, TeamMember};
+use crate::model::{HazardousScenario, Node, RiskCategory, Row, Study, TeamMember};
 
-pub const SCHEMA_VERSION: i64 = 1;
+/// v1: flat `guidewords` table, `rows.guideword`.
+/// v2: `categories` + `scenarios` tables, `rows.scenario`.
+pub const SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -20,13 +22,16 @@ CREATE TABLE nodes (
     id TEXT PRIMARY KEY, position INTEGER NOT NULL,
     name TEXT NOT NULL, description TEXT NOT NULL, drawings TEXT NOT NULL
 );
-CREATE TABLE guidewords (
-    id TEXT PRIMARY KEY, position INTEGER NOT NULL,
-    category TEXT NOT NULL, name TEXT NOT NULL, prompt TEXT NOT NULL
+CREATE TABLE categories (
+    id TEXT PRIMARY KEY, position INTEGER NOT NULL, name TEXT NOT NULL
+);
+CREATE TABLE scenarios (
+    id TEXT PRIMARY KEY, category_id TEXT NOT NULL, position INTEGER NOT NULL,
+    name TEXT NOT NULL, description TEXT NOT NULL
 );
 CREATE TABLE rows (
     id TEXT PRIMARY KEY, position INTEGER NOT NULL,
-    node_id TEXT NOT NULL, guideword TEXT NOT NULL,
+    node_id TEXT NOT NULL, scenario TEXT NOT NULL,
     hazard TEXT NOT NULL, cause TEXT NOT NULL, consequence TEXT NOT NULL, safeguards TEXT NOT NULL,
     likelihood INTEGER, severity INTEGER,
     recommendations TEXT NOT NULL,
@@ -98,9 +103,13 @@ fn write_db(path: &Path, study: &Study) -> rusqlite::Result<()> {
             nodes.execute(params![n.id, i, n.name, n.description, n.drawings])?;
         }
 
-        let mut gws = tx.prepare("INSERT INTO guidewords VALUES (?1, ?2, ?3, ?4, ?5)")?;
-        for (i, g) in study.guidewords.iter().enumerate() {
-            gws.execute(params![g.id, i, g.category, g.name, g.prompt])?;
+        let mut cats = tx.prepare("INSERT INTO categories VALUES (?1, ?2, ?3)")?;
+        let mut scens = tx.prepare("INSERT INTO scenarios VALUES (?1, ?2, ?3, ?4, ?5)")?;
+        for (i, c) in study.categories.iter().enumerate() {
+            cats.execute(params![c.id, i, c.name])?;
+            for (j, sc) in c.scenarios.iter().enumerate() {
+                scens.execute(params![sc.id, c.id, j, sc.name, sc.description])?;
+            }
         }
 
         let mut rows = tx.prepare(
@@ -111,7 +120,7 @@ fn write_db(path: &Path, study: &Study) -> rusqlite::Result<()> {
                 r.id,
                 i,
                 r.node_id,
-                r.guideword,
+                r.scenario,
                 r.hazard,
                 r.cause,
                 r.consequence,
@@ -160,24 +169,20 @@ fn read_db(path: &Path) -> Result<Study, LoadError> {
         })?
         .collect::<Result<_, _>>()?;
 
-    let guidewords = conn
-        .prepare("SELECT id, category, name, prompt FROM guidewords ORDER BY position")?
-        .query_map([], |r| {
-            Ok(Guideword { id: r.get(0)?, category: r.get(1)?, name: r.get(2)?, prompt: r.get(3)? })
-        })?
-        .collect::<Result<_, _>>()?;
+    let categories = if version >= 2 { read_categories(&conn)? } else { read_v1_guidewords(&conn)? };
+    let scenario_col = if version >= 2 { "scenario" } else { "guideword" };
 
     let rows = conn
-        .prepare(
-            "SELECT id, node_id, guideword, hazard, cause, consequence, safeguards, likelihood, severity,
+        .prepare(&format!(
+            "SELECT id, node_id, {scenario_col}, hazard, cause, consequence, safeguards, likelihood, severity,
                     recommendations, residual_likelihood, residual_severity, owner, status, comments
-             FROM rows ORDER BY position",
-        )?
+             FROM rows ORDER BY position"
+        ))?
         .query_map([], |r| {
             Ok(Row {
                 id: r.get(0)?,
                 node_id: r.get(1)?,
-                guideword: r.get(2)?,
+                scenario: r.get(2)?,
                 hazard: r.get(3)?,
                 cause: r.get(4)?,
                 consequence: r.get(5)?,
@@ -194,7 +199,49 @@ fn read_db(path: &Path) -> Result<Study, LoadError> {
         })?
         .collect::<Result<_, _>>()?;
 
-    Ok(Study { info, team, nodes, rows, guidewords, matrix })
+    Ok(Study { info, team, nodes, rows, categories, matrix })
+}
+
+fn read_categories(conn: &Connection) -> Result<Vec<RiskCategory>, LoadError> {
+    let mut categories: Vec<RiskCategory> = conn
+        .prepare("SELECT id, name FROM categories ORDER BY position")?
+        .query_map([], |r| Ok(RiskCategory { id: r.get(0)?, name: r.get(1)?, scenarios: Vec::new() }))?
+        .collect::<Result<_, _>>()?;
+    let mut stmt = conn.prepare("SELECT category_id, id, name, description FROM scenarios ORDER BY position")?;
+    let scenarios = stmt.query_map([], |r| {
+        Ok((r.get::<_, String>(0)?, HazardousScenario { id: r.get(1)?, name: r.get(2)?, description: r.get(3)? }))
+    })?;
+    for item in scenarios {
+        let (category_id, scenario) = item?;
+        if let Some(c) = categories.iter_mut().find(|c| c.id == category_id) {
+            c.scenarios.push(scenario);
+        }
+    }
+    Ok(categories)
+}
+
+/// v1 stored a flat guideword list with the category name on each entry.
+fn read_v1_guidewords(conn: &Connection) -> Result<Vec<RiskCategory>, LoadError> {
+    let mut categories: Vec<RiskCategory> = Vec::new();
+    let mut stmt = conn.prepare("SELECT id, category, name, prompt FROM guidewords ORDER BY position")?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(1)?,
+            HazardousScenario { id: r.get(0)?, name: r.get(2)?, description: r.get(3)? },
+        ))
+    })?;
+    for item in rows {
+        let (category, scenario) = item?;
+        match categories.iter_mut().find(|c| c.name == category) {
+            Some(c) => c.scenarios.push(scenario),
+            None => categories.push(RiskCategory {
+                id: format!("v1-{}", categories.len()),
+                name: category,
+                scenarios: vec![scenario],
+            }),
+        }
+    }
+    Ok(categories)
 }
 
 fn to_json<T: serde::Serialize>(value: &T) -> String {

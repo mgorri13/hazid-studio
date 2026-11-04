@@ -8,7 +8,8 @@ pub struct Study {
     pub team: Vec<TeamMember>,
     pub nodes: Vec<Node>,
     pub rows: Vec<Row>,
-    pub guidewords: Vec<Guideword>,
+    /// The study's own copy of the risk database (categories of hazardous scenarios).
+    pub categories: Vec<RiskCategory>,
     pub matrix: RiskMatrix,
 }
 
@@ -48,7 +49,8 @@ pub struct Node {
 pub struct Row {
     pub id: String,
     pub node_id: String,
-    pub guideword: String,
+    /// Name of the hazardous scenario from the risk database.
+    pub scenario: String,
     pub hazard: String,
     pub cause: String,
     pub consequence: String,
@@ -65,11 +67,18 @@ pub struct Row {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Guideword {
+pub struct RiskCategory {
     pub id: String,
-    pub category: String,
     pub name: String,
-    pub prompt: String,
+    pub scenarios: Vec<HazardousScenario>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HazardousScenario {
+    pub id: String,
+    pub name: String,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

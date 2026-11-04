@@ -132,14 +132,14 @@ input:focus, textarea:focus, select:focus { outline: 2px solid color-mix(in srgb
 .node-title:focus { outline: none; border-bottom: 1px solid var(--line-strong); }
 .node-meta { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
 
-.guideword-panel { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 18px; }
+.checklist-panel { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 18px; }
 .panel-toggle {
   display: flex; justify-content: space-between; width: 100%; padding: 10px 14px;
   border: none; background: none; cursor: pointer; font-weight: 500;
 }
-.guideword-groups { padding: 2px 14px 12px; display: grid; gap: 10px; }
-.guideword-group { display: grid; grid-template-columns: 170px 1fr; gap: 10px; align-items: start; }
-.guideword-cat { color: var(--muted); font-size: 12px; padding-top: 4px; }
+.checklist-groups { padding: 2px 14px 12px; display: grid; gap: 10px; }
+.checklist-group { display: grid; grid-template-columns: 170px 1fr; gap: 10px; align-items: start; }
+.checklist-cat { color: var(--muted); font-size: 12px; padding-top: 4px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
@@ -213,3 +213,68 @@ input:focus, textarea:focus, select:focus { outline: 2px solid color-mix(in srgb
 .legend { display: flex; gap: 16px; margin: 12px 0 0 178px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
 .legend-item i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* Worksheet row reached from the landscape */
+@keyframes flash { from { background: #fef3c7; } to { background: transparent; } }
+.sheet tr.highlight td { animation: flash 2.5s ease-out; }
+
+/* Risk database */
+.db-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 8px; }
+.db-intro p { margin: 0; max-width: 620px; }
+.db-category { margin-top: 26px; }
+.db-category-head { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line-strong); padding-bottom: 4px; }
+.db-category-name { flex: 1; border: none; padding: 4px 0; font-size: 14px; font-weight: 600; background: none; }
+.db-tools { display: flex; opacity: 0; }
+.db-category-head:hover .db-tools, .db-category-head:focus-within .db-tools { opacity: 1; }
+.db-category .simple-table input { border-color: transparent; }
+.db-category .simple-table input:hover { border-color: var(--line); }
+.db-category .simple-table input:focus { border-color: var(--line-strong); }
+.db-category .simple-table .row-tools { opacity: 0; }
+.db-category .simple-table tr:hover .row-tools { opacity: 1; }
+.db-add-category { margin-top: 28px; }
+
+/* Risk landscape */
+.landscape { display: flex; height: 100%; }
+.landscape > .page { flex: 1; min-width: 0; overflow-y: auto; }
+.legend.inline { margin: 0 8px 0 0; }
+.legend-item i.unrated { background: var(--bg); border: 1px dashed var(--line-strong); }
+.ls-node { margin-top: 22px; }
+.ls-node-head { display: flex; align-items: baseline; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.ls-node-name { font-weight: 600; font-size: 14px; }
+.ls-node-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ls-counts { margin-left: auto; display: flex; gap: 12px; }
+.ls-count { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ls-count i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.ls-empty { margin: 0; }
+.ls-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
+.ls-tile {
+  display: flex; flex-direction: column; gap: 4px; min-height: 76px; padding: 8px 10px;
+  border: 1px solid transparent; border-radius: 8px; text-align: left; cursor: pointer; color: #27272a;
+}
+.ls-tile:hover { border-color: rgba(0, 0, 0, 0.25); }
+.ls-tile.selected { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+.ls-tile.unrated { background: var(--bg); border: 1px dashed var(--line-strong); }
+.ls-tile-top { display: flex; justify-content: space-between; font-size: 11px; }
+.ls-ref { color: rgba(0, 0, 0, 0.55); font-variant-numeric: tabular-nums; }
+.ls-class { font-weight: 600; }
+.ls-scenario { font-weight: 600; font-size: 12px; line-height: 1.3; }
+.ls-hazard {
+  font-size: 12px; line-height: 1.35; color: rgba(0, 0, 0, 0.7);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.summary-panel {
+  width: 360px; flex-shrink: 0; overflow-y: auto; padding: 22px 22px 40px;
+  border-left: 1px solid var(--line); background: var(--bg);
+}
+.sum-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.sum-title { font-size: 16px; font-weight: 600; margin-top: 3px; }
+.sum-risk { display: flex; align-items: center; gap: 14px; padding: 12px; margin-bottom: 18px; border-radius: 8px; background: var(--bg-soft); }
+.sum-risk > div { flex: 1; }
+.sum-risk .risk-badge { margin-top: 4px; }
+.sum-arrow { color: var(--muted); }
+.sum-ls { font-size: 11px; margin-top: 4px; }
+.sum-field { margin-bottom: 14px; }
+.sum-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
+.sum-text { white-space: pre-wrap; line-height: 1.45; }
+.sum-open { margin-top: 8px; width: 100%; }

@@ -4,6 +4,10 @@ Desktop application for running HAZID (Hazard Identification) studies, oriented 
 
 Stack: Tauri 2 (Rust) + React + TypeScript. Each study is stored as a single `.hazid` file (SQLite). Export to Excel (`.xlsx`).
 
+The risk database (categories of hazardous scenarios) is shared by all studies on the computer and stored as
+`risk-database.json` in the app data folder (`~/Library/Application Support/com.hazidstudio.app/` on macOS,
+`%APPDATA%\com.hazidstudio.app\` on Windows). Each study keeps its own copy inside the `.hazid` file.
+
 ## Development
 
 ```bash

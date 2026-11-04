@@ -1,4 +1,4 @@
-import type { Guideword, Node, RiskMatrix, Row, Study } from "./types";
+import type { Node, RiskCategory, RiskMatrix, Row, Study } from "./types";
 
 export const uid = () => crypto.randomUUID();
 
@@ -34,9 +34,9 @@ export const DEFAULT_MATRIX: RiskMatrix = {
   ],
 };
 
-// Guidewords structured after the hazard groups in IAEA SSG-64 (internal hazards),
+// Starting risk database, structured after the hazard groups in IAEA SSG-64 (internal hazards),
 // SSG-68 (external hazards) and common radiological / conventional safety checklists.
-const GUIDEWORDS: [string, string, string][] = [
+const DEFAULT_SCENARIOS: [string, string, string][] = [
   ["Radiological", "Direct radiation", "Exposure to radiation from sources, process streams, waste or gaps in shielding."],
   ["Radiological", "Loss of shielding", "Removal, degradation or bypass of shielding; incorrect source positioning."],
   ["Radiological", "Contamination", "Spread of loose or airborne radioactive contamination; loss of contamination control."],
@@ -79,10 +79,38 @@ const GUIDEWORDS: [string, string, string][] = [
   ["Environment and security", "Security interface", "Conflicts between safety and security measures, e.g. access control versus evacuation."],
 ];
 
-export const defaultGuidewords = (): Guideword[] =>
-  GUIDEWORDS.map(([category, name, prompt]) => ({ id: uid(), category, name, prompt }));
+export function defaultCategories(): RiskCategory[] {
+  const categories: RiskCategory[] = [];
+  for (const [category, name, description] of DEFAULT_SCENARIOS) {
+    let c = categories.find((x) => x.name === category);
+    if (!c) categories.push((c = { id: uid(), name: category, scenarios: [] }));
+    c.scenarios.push({ id: uid(), name, description });
+  }
+  return categories;
+}
 
-export const newStudy = (): Study => ({
+/** Deep copy with fresh ids, so a study's copy never shares ids with the database. */
+export const copyCategories = (categories: RiskCategory[]): RiskCategory[] =>
+  categories.map((c) => ({ ...c, id: uid(), scenarios: c.scenarios.map((s) => ({ ...s, id: uid() })) }));
+
+/**
+ * Adds to `target` every category and scenario from `source` that it does not already have
+ * (matched by name, ignoring case). Nothing is removed or overwritten.
+ */
+export function mergeCategories(target: RiskCategory[], source: RiskCategory[]): RiskCategory[] {
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const result = target.map((c) => ({ ...c, scenarios: [...c.scenarios] }));
+  for (const src of source) {
+    let c = result.find((x) => same(x.name, src.name));
+    if (!c) result.push((c = { id: uid(), name: src.name, scenarios: [] }));
+    for (const s of src.scenarios) {
+      if (!c.scenarios.some((x) => same(x.name, s.name))) c.scenarios.push({ ...s, id: uid() });
+    }
+  }
+  return result;
+}
+
+export const newStudy = (database: RiskCategory[]): Study => ({
   info: {
     title: "",
     facility: "",
@@ -96,16 +124,16 @@ export const newStudy = (): Study => ({
   team: [],
   nodes: [],
   rows: [],
-  guidewords: defaultGuidewords(),
+  categories: copyCategories(database),
   matrix: structuredClone(DEFAULT_MATRIX),
 });
 
 export const newNode = (n: number): Node => ({ id: uid(), name: `Node ${n}`, description: "", drawings: "" });
 
-export const newRow = (nodeId: string, guideword = ""): Row => ({
+export const newRow = (nodeId: string, scenario = ""): Row => ({
   id: uid(),
   nodeId,
-  guideword,
+  scenario,
   hazard: "",
   cause: "",
   consequence: "",
