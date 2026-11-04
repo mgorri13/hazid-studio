@@ -1,0 +1,65 @@
+# Builds the Windows installers on GitHub's Windows servers and publishes them as a GitHub release.
+# Run it from the Actions tab ("Run workflow") or by pushing a tag such as v0.2.0.
+# The release tag comes from "version" in src-tauri/tauri.conf.json.
+name: Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # The Rust tests embed the built frontend, so build it first.
+      - name: Test
+        shell: bash
+        run: |
+          npm run build
+          cd src-tauri && cargo test
+
+      - name: Build installers and publish release
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: HAZID Studio v__VERSION__
+          releaseBody: |
+            Windows downloads:
+            - `*_x64_en-US.msi` — installer for IT deployment (per-machine)
+            - `*_x64-setup.exe` — installer for the current user, no admin rights needed
+            - `HAZID-Studio-portable.exe` — runs without installing (needs Microsoft Edge WebView2, included in Windows 11)
+
+            Builds are not code-signed, so Windows SmartScreen will warn on first run.
+          releaseDraft: false
+          prerelease: false
+
+      - name: Upload portable executable
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.tauri.outputs.appVersion }}
+        run: |
+          cp src-tauri/target/release/hazid-studio.exe HAZID-Studio-portable.exe
+          gh release upload "v${VERSION}" HAZID-Studio-portable.exe --clobber
