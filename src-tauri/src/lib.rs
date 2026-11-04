@@ -6,7 +6,7 @@ mod storage;
 
 use std::path::PathBuf;
 
-use model::{RiskCategory, Study};
+use model::{RiskCategory, RiskMatrix, Study};
 use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
@@ -26,12 +26,22 @@ fn export_excel(path: String, study: Study) -> Result<(), String> {
 
 #[tauri::command]
 fn load_risk_database(app: AppHandle) -> Result<Option<Vec<RiskCategory>>, String> {
-    database::load(&app)
+    database::load_database(&app)
 }
 
 #[tauri::command]
 fn save_risk_database(app: AppHandle, categories: Vec<RiskCategory>) -> Result<(), String> {
-    database::save(&app, categories)
+    database::save_database(&app, categories)
+}
+
+#[tauri::command]
+fn load_default_matrix(app: AppHandle) -> Result<Option<RiskMatrix>, String> {
+    database::load_matrix(&app)
+}
+
+#[tauri::command]
+fn save_default_matrix(app: AppHandle, matrix: RiskMatrix) -> Result<(), String> {
+    database::save_matrix(&app, matrix)
 }
 
 /// A `.hazid` path passed on the command line, e.g. when the OS opens the app via file association.
@@ -58,6 +68,8 @@ pub fn run() {
             export_excel,
             load_risk_database,
             save_risk_database,
+            load_default_matrix,
+            save_default_matrix,
             launch_file
         ])
         .run(tauri::generate_context!())

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { RiskCategory, Study } from "./types";
+import type { RiskCategory, RiskMatrix, Study } from "./types";
 
 const HAZID_FILTER = [{ name: "HAZID study", extensions: ["hazid"] }];
 
@@ -10,6 +10,8 @@ export const exportExcel = (path: string, study: Study) => invoke<void>("export_
 export const launchFile = () => invoke<string | null>("launch_file");
 export const loadRiskDatabase = () => invoke<RiskCategory[] | null>("load_risk_database");
 export const saveRiskDatabase = (categories: RiskCategory[]) => invoke<void>("save_risk_database", { categories });
+export const loadDefaultMatrix = () => invoke<RiskMatrix | null>("load_default_matrix");
+export const saveDefaultMatrix = (matrix: RiskMatrix) => invoke<void>("save_default_matrix", { matrix });
 
 export async function pickOpenPath(): Promise<string | null> {
   const p = await open({ multiple: false, directory: false, filters: HAZID_FILTER });

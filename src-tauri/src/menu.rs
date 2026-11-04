@@ -39,7 +39,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&item(app, "view-study", "Study Details", Some("CmdOrCtrl+1"))?)
         .item(&item(app, "view-landscape", "Risk Landscape", Some("CmdOrCtrl+2"))?)
         .item(&item(app, "view-actions", "Action Register", Some("CmdOrCtrl+3"))?)
-        .item(&item(app, "view-matrix", "Risk Matrix", Some("CmdOrCtrl+4"))?)
+        .item(&item(app, "view-map", "Risk Map", Some("CmdOrCtrl+4"))?)
         .build()?;
 
     let database = SubmenuBuilder::new(app, "Risk Database")
@@ -48,6 +48,14 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .separator()
         .item(&item(app, "db-to-study", "Add Database Risks to This Study", None)?)
         .item(&item(app, "study-to-db", "Save This Study's Risks to Database", None)?)
+        .build()?;
+
+    let matrix = SubmenuBuilder::new(app, "Risk Matrix")
+        .item(&item(app, "mx-default", "Edit Default Matrix", Some("CmdOrCtrl+M"))?)
+        .item(&item(app, "mx-study", "Edit This Study's Matrix", None)?)
+        .separator()
+        .item(&item(app, "mx-to-study", "Apply Default Matrix to This Study", None)?)
+        .item(&item(app, "study-to-mx", "Save This Study's Matrix as Default", None)?)
         .build()?;
 
     let mut menus: Vec<Submenu<Wry>> = Vec::new();
@@ -66,7 +74,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             .item(&item(app, "quit", "Quit HAZID Studio", Some("CmdOrCtrl+Q"))?)
             .build()?,
     );
-    menus.extend([file, edit, view, database]);
+    menus.extend([file, edit, view, database, matrix]);
 
     let refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> = menus.iter().map(|m| m as _).collect();
     Menu::with_items(app, &refs)

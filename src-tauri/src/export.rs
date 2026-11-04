@@ -250,13 +250,13 @@ fn matrix_sheet(study: &Study) -> Result<Worksheet, XlsxError> {
     let f = Formats::new();
     let m = &study.matrix;
     let mut ws = Worksheet::new();
-    ws.set_name("Risk Matrix")?;
+    ws.set_name("Risk Map")?;
     ws.set_column_width(0, 26)?;
     for c in 1..=m.severity.len() as u16 {
         ws.set_column_width(c, 16)?;
     }
 
-    ws.write_string_with_format(0, 0, "Risk matrix — scenarios per cell (current / residual)", &f.title)?;
+    ws.write_string_with_format(0, 0, "Risk map — scenarios per cell (current / residual)", &f.title)?;
 
     // Likelihood rows are listed from highest to lowest, as matrices are usually drawn.
     let top = 2u32;

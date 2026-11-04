@@ -1,6 +1,7 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 import { uid } from "../defaults";
 import type { HazardousScenario, RiskCategory } from "../types";
+import { TextCell } from "./fields";
 
 export type DatabaseScope = "database" | "study";
 
@@ -120,10 +121,11 @@ export function RiskDatabaseView(props: Props) {
                     />
                   </td>
                   <td>
-                    <input
+                    <TextCell
+                      className="boxed"
                       placeholder="Description / prompts for the team"
                       value={sc.description}
-                      onChange={(e) => setScenario(cat.id, sc.id, { description: e.target.value })}
+                      onChange={(v) => setScenario(cat.id, sc.id, { description: v })}
                     />
                   </td>
                   <td className="row-tools">

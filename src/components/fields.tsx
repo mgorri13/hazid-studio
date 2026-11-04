@@ -2,7 +2,13 @@ import { useLayoutEffect, useRef } from "react";
 import type { Level, RiskClass } from "../types";
 
 /** Borderless textarea that grows with its content, used for worksheet cells. */
-export function TextCell(props: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+export function TextCell(props: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  /** Extra class, e.g. `boxed` for a bordered field outside the worksheet. */
+  className?: string;
+}) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -13,7 +19,7 @@ export function TextCell(props: { value: string; onChange: (v: string) => void; 
   return (
     <textarea
       ref={ref}
-      className="cell-input"
+      className={`cell-input ${props.className ?? ""}`}
       rows={1}
       value={props.value}
       placeholder={props.placeholder}

@@ -110,7 +110,7 @@ export function mergeCategories(target: RiskCategory[], source: RiskCategory[]):
   return result;
 }
 
-export const newStudy = (database: RiskCategory[]): Study => ({
+export const newStudy = (database: RiskCategory[], matrix: RiskMatrix): Study => ({
   info: {
     title: "",
     facility: "",
@@ -125,7 +125,7 @@ export const newStudy = (database: RiskCategory[]): Study => ({
   nodes: [],
   rows: [],
   categories: copyCategories(database),
-  matrix: structuredClone(DEFAULT_MATRIX),
+  matrix: structuredClone(matrix),
 });
 
 export const newNode = (n: number): Node => ({ id: uid(), name: `Node ${n}`, description: "", drawings: "" });

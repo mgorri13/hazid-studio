@@ -119,7 +119,11 @@ input:focus, textarea:focus, select:focus { outline: 2px solid color-mix(in srgb
 .simple-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .simple-table input { width: 100%; }
 .simple-table.defs td { padding: 8px 6px; }
-.def-code { width: 36px; font-weight: 600; }
+.def-code { width: 64px; font-weight: 600; }
+.def-index { width: 44px; }
+.def-color { width: 44px; }
+.def-color input[type="color"] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--line-strong); border-radius: 4px; background: none; cursor: pointer; }
+.section-note { margin: -4px 0 8px; }
 .def-label { width: 180px; }
 .row-tools { white-space: nowrap; width: 1%; }
 
@@ -179,6 +183,10 @@ input:focus, textarea:focus, select:focus { outline: 2px solid color-mix(in srgb
   border: none; background: transparent; padding: 7px 8px; line-height: 1.4;
 }
 .cell-input:focus { background: #fff; }
+.cell-input.boxed { min-height: 30px; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--bg); }
+.db-category .cell-input.boxed { border-color: transparent; }
+.db-category .cell-input.boxed:hover { border-color: var(--line); }
+.db-category .cell-input.boxed:focus { border-color: var(--line-strong); }
 .level-select {
   position: relative; display: block; padding: 7px 8px; text-align: center;
   font-weight: 500; font-variant-numeric: tabular-nums; cursor: pointer;

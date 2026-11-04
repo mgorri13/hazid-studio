@@ -4,33 +4,37 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import * as api from "./api";
-import { copyCategories, defaultCategories, mergeCategories, newNode, newStudy } from "./defaults";
-import type { RiskCategory, Row, Study } from "./types";
+import { DEFAULT_MATRIX, copyCategories, defaultCategories, mergeCategories, newNode, newStudy } from "./defaults";
+import * as mx from "./matrix";
+import type { RiskCategory, RiskMatrix, Row, Study } from "./types";
 import { StudyView } from "./components/StudyView";
 import { NodeView } from "./components/NodeView";
 import { ActionsView } from "./components/ActionsView";
-import { MatrixView } from "./components/MatrixView";
+import { MapView } from "./components/MapView";
+import { MatrixEditorView, type MatrixScope } from "./components/MatrixEditorView";
 import { LandscapeView } from "./components/LandscapeView";
 import { RiskDatabaseView, type DatabaseScope } from "./components/RiskDatabaseView";
 
 type View =
-  | { kind: "study" | "landscape" | "actions" | "matrix" | "database" }
+  | { kind: "study" | "landscape" | "actions" | "map" | "database" | "matrix" }
   | { kind: "node"; id: string; rowId?: string };
 
 const countScenarios = (cs: RiskCategory[]) => cs.reduce((n, c) => n + c.scenarios.length, 0);
 
 export default function App() {
   const [database, setDatabaseState] = useState<RiskCategory[]>(defaultCategories);
-  const [study, setStudy] = useState<Study>(() => newStudy(database));
+  const [defaultMatrix, setDefaultMatrixState] = useState<RiskMatrix>(() => structuredClone(DEFAULT_MATRIX));
+  const [study, setStudy] = useState<Study>(() => newStudy(database, defaultMatrix));
   const [path, setPath] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [view, setView] = useState<View>({ kind: "study" });
   const [dbScope, setDbScope] = useState<DatabaseScope>("database");
+  const [matrixScope, setMatrixScope] = useState<MatrixScope>("default");
   const [notice, setNotice] = useState("");
 
   // Menu events and the close handler are registered once, so they read state through refs.
-  const state = useRef({ study, path, dirty, database });
-  state.current = { study, path, dirty, database };
+  const state = useRef({ study, path, dirty, database, defaultMatrix });
+  state.current = { study, path, dirty, database, defaultMatrix };
 
   const update = useCallback((fn: (s: Study) => Study) => {
     setStudy(fn);
@@ -44,7 +48,8 @@ export default function App() {
 
   const fail = (e: unknown) => message(String(e), { title: "HAZID Studio", kind: "error" });
 
-  // The risk database is written to disk shortly after each user edit (not after loading it).
+  // The risk database and default matrix are written to disk shortly after each user edit
+  // (not after loading them).
   const dbEdited = useRef(false);
   const setDatabase = (fn: (c: RiskCategory[]) => RiskCategory[]) => {
     dbEdited.current = true;
@@ -56,6 +61,18 @@ export default function App() {
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [database]);
+
+  const matrixEdited = useRef(false);
+  const setDefaultMatrix = (fn: (m: RiskMatrix) => RiskMatrix) => {
+    matrixEdited.current = true;
+    setDefaultMatrixState(fn);
+  };
+  useEffect(() => {
+    if (!matrixEdited.current || !isTauri()) return;
+    const t = window.setTimeout(() => api.saveDefaultMatrix(defaultMatrix).catch(fail), 400);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultMatrix]);
 
   const confirmDiscard = async () =>
     !state.current.dirty ||
@@ -74,7 +91,7 @@ export default function App() {
   };
 
   const newFile = async () => {
-    if (await confirmDiscard()) load(newStudy(state.current.database), null);
+    if (await confirmDiscard()) load(newStudy(state.current.database, state.current.defaultMatrix), null);
   };
 
   const openFile = async (given?: string) => {
@@ -131,6 +148,43 @@ export default function App() {
     flash(added > 0 ? `Saved ${added} hazardous scenario(s) to the database` : "The database already has every scenario in this study");
   };
 
+  const confirm = (text: string, title: string, okLabel: string) =>
+    ask(text, { title, kind: "warning", okLabel, cancelLabel: "Cancel" });
+
+  const defaultMatrixToStudy = async () => {
+    const { study, defaultMatrix } = state.current;
+    const affected = mx.rowsOutOfRange(study.rows, defaultMatrix);
+    const text =
+      "Replace this study's risk matrix with the default matrix?" +
+      (affected ? `\n\n${affected} row(s) have ratings that do not exist in the default matrix; those ratings will be cleared.` : "");
+    if (!(await confirm(text, "Apply default matrix", "Apply"))) return;
+    update((s) => mx.applyMatrixToStudy(s, defaultMatrix));
+    flash("Default matrix applied to this study");
+  };
+
+  const studyMatrixToDefault = async () => {
+    const ok = await confirm("Replace the default matrix with this study's matrix?", "Save as default", "Replace");
+    if (!ok) return;
+    setDefaultMatrix(() => structuredClone(state.current.study.matrix));
+    flash("Saved as the default matrix");
+  };
+
+  const removeMatrixLevel = async (axis: mx.Axis, index: number) => {
+    const name = axis === "likelihood" ? "likelihood" : "severity";
+    if (matrixScope === "default") return setDefaultMatrix((m) => mx.removeLevel(m, axis, index));
+    const used = mx.rowsUsingLevel(study.rows, axis, index);
+    if (used > 0) {
+      const lvl = study.matrix[axis][index];
+      const ok = await confirm(
+        `${used} row(s) are rated with ${name} level ${lvl.code} (${lvl.label}). Their ${name} rating will be cleared so you can review them.`,
+        "Remove level",
+        "Remove and clear",
+      );
+      if (!ok) return;
+    }
+    update((s) => mx.removeLevelFromStudy(s, axis, index));
+  };
+
   const quit = async () => {
     if (await confirmDiscard()) await getCurrentWindow().destroy();
   };
@@ -146,7 +200,15 @@ export default function App() {
       case "view-study": return setView({ kind: "study" });
       case "view-landscape": return setView({ kind: "landscape" });
       case "view-actions": return setView({ kind: "actions" });
-      case "view-matrix": return setView({ kind: "matrix" });
+      case "view-map": return setView({ kind: "map" });
+      case "mx-default":
+        setMatrixScope("default");
+        return setView({ kind: "matrix" });
+      case "mx-study":
+        setMatrixScope("study");
+        return setView({ kind: "matrix" });
+      case "mx-to-study": return defaultMatrixToStudy();
+      case "study-to-mx": return studyMatrixToDefault();
       case "db-open":
         setDbScope("database");
         return setView({ kind: "database" });
@@ -164,13 +226,18 @@ export default function App() {
     // Lets the UI run in a plain browser (`npm run dev`) for quick layout work.
     if (!isTauri()) return;
 
-    api
-      .loadRiskDatabase()
-      .then((db) => {
-        if (!db) return;
-        setDatabaseState(db);
-        // The untouched startup study was created from the defaults; give it the user's database.
-        if (!state.current.dirty && !state.current.path) setStudy((s) => ({ ...s, categories: copyCategories(db) }));
+    Promise.all([api.loadRiskDatabase(), api.loadDefaultMatrix()])
+      .then(([db, matrix]) => {
+        if (db) setDatabaseState(db);
+        if (matrix) setDefaultMatrixState(matrix);
+        // The untouched startup study was created from the built-in defaults; give it the user's.
+        if (!state.current.dirty && !state.current.path) {
+          setStudy((s) => ({
+            ...s,
+            categories: db ? copyCategories(db) : s.categories,
+            matrix: matrix ? structuredClone(matrix) : s.matrix,
+          }));
+        }
       })
       .catch(fail)
       .finally(() =>
@@ -289,8 +356,11 @@ export default function App() {
           <div className="nav-section"><span>Review</span></div>
           {navButton("landscape", "Risk landscape")}
           {navButton("actions", "Action register", openActions > 0 && <span className="count">{openActions}</span>)}
-          {navButton("matrix", "Risk matrix")}
+          {navButton("map", "Risk map")}
+
+          <div className="nav-section"><span>Criteria</span></div>
           {navButton("database", "Risk database")}
+          {navButton("matrix", "Risk matrix")}
         </nav>
 
         <main className="content">
@@ -306,7 +376,30 @@ export default function App() {
           )}
           {view.kind === "landscape" && <LandscapeView study={study} onOpenRow={openRow} />}
           {view.kind === "actions" && <ActionsView study={study} update={update} />}
-          {view.kind === "matrix" && <MatrixView study={study} update={update} />}
+          {view.kind === "map" && (
+            <MapView
+              study={study}
+              onEditMatrix={() => {
+                setMatrixScope("study");
+                setView({ kind: "matrix" });
+              }}
+            />
+          )}
+          {view.kind === "matrix" && (
+            <MatrixEditorView
+              scope={matrixScope}
+              onScope={setMatrixScope}
+              matrix={matrixScope === "default" ? defaultMatrix : study.matrix}
+              onChange={
+                matrixScope === "default"
+                  ? setDefaultMatrix
+                  : (fn) => update((s) => ({ ...s, matrix: fn(s.matrix) }))
+              }
+              onRemoveLevel={removeMatrixLevel}
+              onDefaultToStudy={defaultMatrixToStudy}
+              onStudyToDefault={studyMatrixToDefault}
+            />
+          )}
           {view.kind === "database" && (
             <RiskDatabaseView
               scope={dbScope}
