@@ -28,3 +28,7 @@ Installers are written to `src-tauri/target/release/bundle/`. Builds are current
 Windows installers are built by GitHub Actions (`.github/workflows/windows-release.yml`). To publish a new version:
 bump `version` in `src-tauri/tauri.conf.json`, push, then run the **Windows release** workflow from the Actions tab
 (or push a tag `vX.Y.Z`). The release contains an `.msi`, a per-user `-setup.exe` and a portable `.exe`.
+
+## License
+
+[MIT](LICENSE)

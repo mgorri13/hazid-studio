@@ -3,6 +3,7 @@ name = "hazid-studio"
 version = "0.2.0"
 description = "HAZID study tool"
 authors = ["Martin Gorriaran"]
+license = "MIT"
 edition = "2024"
 
 [lib]
