@@ -11,6 +11,21 @@ pub struct Study {
     /// The study's own copy of the risk database (categories of hazardous scenarios).
     pub categories: Vec<RiskCategory>,
     pub matrix: RiskMatrix,
+    /// Metadata only; file contents live in the attachment store while the study is open.
+    #[serde(default)]
+    pub attachments: Vec<Attachment>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Attachment {
+    pub id: String,
+    pub node_id: String,
+    pub name: String,
+    pub mime: String,
+    pub size: u64,
+    /// ISO 8601 date-time.
+    pub added: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

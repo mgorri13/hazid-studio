@@ -89,6 +89,7 @@ fn study_sheet(study: &Study) -> Result<Worksheet, XlsxError> {
     ws.set_column_width(0, 22)?;
     ws.set_column_width(1, 70)?;
     ws.set_column_width(2, 30)?;
+    ws.set_column_width(3, 40)?;
 
     let title = if study.info.title.is_empty() { "HAZID Study" } else { &study.info.title };
     ws.write_string_with_format(0, 0, title, &f.title)?;
@@ -126,7 +127,7 @@ fn study_sheet(study: &Study) -> Result<Worksheet, XlsxError> {
     r += 2;
     ws.write_string_with_format(r, 0, "Nodes", &f.label)?;
     r += 1;
-    for (c, name) in ["Node", "Description", "Drawings"].iter().enumerate() {
+    for (c, name) in ["Node", "Description", "Drawings", "Attachments"].iter().enumerate() {
         ws.write_string_with_format(r, c as u16, *name, &f.header)?;
     }
     for (n, node) in study.nodes.iter().enumerate() {
@@ -134,6 +135,9 @@ fn study_sheet(study: &Study) -> Result<Worksheet, XlsxError> {
         ws.write_string_with_format(r, 0, format!("{}. {}", n + 1, node.name), &f.cell)?;
         ws.write_string_with_format(r, 1, &node.description, &f.cell)?;
         ws.write_string_with_format(r, 2, &node.drawings, &f.cell)?;
+        let files: Vec<&str> =
+            study.attachments.iter().filter(|a| a.node_id == node.id).map(|a| a.name.as_str()).collect();
+        ws.write_string_with_format(r, 3, files.join("\n"), &f.cell)?;
     }
     Ok(ws)
 }

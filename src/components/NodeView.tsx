@@ -3,6 +3,7 @@ import { newRow } from "../defaults";
 import { riskClass, rowRefs } from "../risk";
 import { STATUSES, type Node, type Row, type Study } from "../types";
 import { LevelSelect, RiskBadge, TextCell } from "./fields";
+import { AttachmentsPanel } from "./AttachmentsPanel";
 
 interface Props {
   study: Study;
@@ -77,6 +78,8 @@ export function NodeView({ study, node, update, highlightId }: Props) {
           />
         </div>
       </div>
+
+      <AttachmentsPanel study={study} node={node} update={update} />
 
       <section className="checklist-panel">
         <button className="panel-toggle" onClick={() => setShowChecklist((v) => !v)}>

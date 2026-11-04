@@ -15,6 +15,18 @@ import { MatrixEditorView, type MatrixScope } from "./components/MatrixEditorVie
 import { LandscapeView } from "./components/LandscapeView";
 import { RiskDatabaseView, type DatabaseScope } from "./components/RiskDatabaseView";
 
+type Theme = "light" | "dark";
+
+function initialTheme(): Theme {
+  try {
+    const saved = localStorage.getItem("theme");
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {
+    // Storage unavailable: fall back to the system setting.
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 type View =
   | { kind: "study" | "landscape" | "actions" | "map" | "database" | "matrix" }
   | { kind: "node"; id: string; rowId?: string };
@@ -31,6 +43,19 @@ export default function App() {
   const [dbScope, setDbScope] = useState<DatabaseScope>("database");
   const [matrixScope, setMatrixScope] = useState<MatrixScope>("default");
   const [notice, setNotice] = useState("");
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("theme", theme);
+    } catch {
+      // Not persisted; the choice still applies to this session.
+    }
+    // Also themes the native title bar (Windows) and window chrome.
+    if (isTauri()) getCurrentWindow().setTheme(theme).catch(() => {});
+  }, [theme]);
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
   // Menu events and the close handler are registered once, so they read state through refs.
   const state = useRef({ study, path, dirty, database, defaultMatrix });
@@ -91,7 +116,13 @@ export default function App() {
   };
 
   const newFile = async () => {
-    if (await confirmDiscard()) load(newStudy(state.current.database, state.current.defaultMatrix), null);
+    if (!(await confirmDiscard())) return;
+    try {
+      if (isTauri()) await api.resetAttachments();
+    } catch (e) {
+      return fail(e);
+    }
+    load(newStudy(state.current.database, state.current.defaultMatrix), null);
   };
 
   const openFile = async (given?: string) => {
@@ -201,6 +232,7 @@ export default function App() {
       case "view-landscape": return setView({ kind: "landscape" });
       case "view-actions": return setView({ kind: "actions" });
       case "view-map": return setView({ kind: "map" });
+      case "toggle-theme": return toggleTheme();
       case "mx-default":
         setMatrixScope("default");
         return setView({ kind: "matrix" });
@@ -274,14 +306,21 @@ export default function App() {
   const deleteNode = async (id: string) => {
     const node = study.nodes.find((n) => n.id === id);
     const count = study.rows.filter((r) => r.nodeId === id).length;
-    const ok = await ask(`Delete "${node?.name}"${count ? ` and its ${count} row(s)` : ""}?`, {
+    const files = study.attachments.filter((a) => a.nodeId === id).length;
+    const parts = [count && `${count} row(s)`, files && `${files} attachment(s)`].filter(Boolean).join(" and ");
+    const ok = await ask(`Delete "${node?.name}"${parts ? ` and its ${parts}` : ""}?`, {
       title: "Delete node",
       kind: "warning",
       okLabel: "Delete",
       cancelLabel: "Cancel",
     });
     if (!ok) return;
-    update((s) => ({ ...s, nodes: s.nodes.filter((n) => n.id !== id), rows: s.rows.filter((r) => r.nodeId !== id) }));
+    update((s) => ({
+      ...s,
+      nodes: s.nodes.filter((n) => n.id !== id),
+      rows: s.rows.filter((r) => r.nodeId !== id),
+      attachments: s.attachments.filter((a) => a.nodeId !== id),
+    }));
     setView({ kind: "study" });
   };
 
@@ -319,6 +358,14 @@ export default function App() {
         </div>
         <div className="toolbar">
           {notice && <span className="notice">{notice}</span>}
+          <button
+            className="btn theme-btn"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode (Ctrl/⌘ ⇧ D)" : "Switch to dark mode (Ctrl/⌘ ⇧ D)"}
+            aria-label="Toggle dark mode"
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
           <button className="btn" onClick={newFile} title="New study (Ctrl/⌘ N)">New</button>
           <button className="btn" onClick={() => openFile()} title="Open study (Ctrl/⌘ O)">Open</button>
           <button className="btn" onClick={() => saveFile()} title="Save (Ctrl/⌘ S)">Save</button>

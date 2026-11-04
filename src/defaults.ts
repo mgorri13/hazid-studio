@@ -126,6 +126,7 @@ export const newStudy = (database: RiskCategory[], matrix: RiskMatrix): Study =>
   rows: [],
   categories: copyCategories(database),
   matrix: structuredClone(matrix),
+  attachments: [],
 });
 
 export const newNode = (n: number): Node => ({ id: uid(), name: `Node ${n}`, description: "", drawings: "" });

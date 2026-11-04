@@ -40,6 +40,8 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&item(app, "view-landscape", "Risk Landscape", Some("CmdOrCtrl+2"))?)
         .item(&item(app, "view-actions", "Action Register", Some("CmdOrCtrl+3"))?)
         .item(&item(app, "view-map", "Risk Map", Some("CmdOrCtrl+4"))?)
+        .separator()
+        .item(&item(app, "toggle-theme", "Toggle Dark Mode", Some("CmdOrCtrl+Shift+D"))?)
         .build()?;
 
     let database = SubmenuBuilder::new(app, "Risk Database")

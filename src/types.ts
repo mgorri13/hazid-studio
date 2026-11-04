@@ -8,6 +8,18 @@ export interface Study {
   /** The study's own copy of the risk database. */
   categories: RiskCategory[];
   matrix: RiskMatrix;
+  /** Metadata only; the files themselves are held by the backend while the study is open. */
+  attachments: Attachment[];
+}
+
+export interface Attachment {
+  id: string;
+  nodeId: string;
+  name: string;
+  mime: string;
+  size: number;
+  /** ISO 8601 date-time. */
+  added: string;
 }
 
 export interface StudyInfo {

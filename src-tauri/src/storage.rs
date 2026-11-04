@@ -6,11 +6,12 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, params};
 
-use crate::model::{HazardousScenario, Node, RiskCategory, Row, Study, TeamMember};
+use crate::model::{Attachment, HazardousScenario, Node, RiskCategory, Row, Study, TeamMember};
 
 /// v1: flat `guidewords` table, `rows.guideword`.
 /// v2: `categories` + `scenarios` tables, `rows.scenario`.
-pub const SCHEMA_VERSION: i64 = 2;
+/// v3: `attachments` table holding node files as blobs.
+pub const SCHEMA_VERSION: i64 = 3;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -38,25 +39,39 @@ CREATE TABLE rows (
     residual_likelihood INTEGER, residual_severity INTEGER,
     owner TEXT NOT NULL, status TEXT NOT NULL, comments TEXT NOT NULL
 );
+CREATE TABLE attachments (
+    id TEXT PRIMARY KEY, position INTEGER NOT NULL, node_id TEXT NOT NULL,
+    name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, added TEXT NOT NULL,
+    data BLOB NOT NULL
+);
 ";
 
-pub fn save(path: &Path, study: &Study) -> Result<(), String> {
+/// `blobs` is the attachment store: a folder holding each attachment's contents under its id.
+pub fn save(path: &Path, study: &Study, blobs: &Path) -> Result<(), String> {
     let tmp = tmp_path(path);
     let _ = fs::remove_file(&tmp);
-    write_db(&tmp, study).map_err(|e| {
+    write_db(&tmp, study, blobs).map_err(|e| {
         let _ = fs::remove_file(&tmp);
         format!("Could not save study: {e}")
     })?;
     fs::rename(&tmp, path).map_err(|e| format!("Could not save study: {e}"))
 }
 
-pub fn load(path: &Path) -> Result<Study, String> {
-    read_db(path).map_err(|e| format!("Could not open study: {e}"))
+/// Reads a study and extracts its attachment contents into `blobs`.
+pub fn load(path: &Path, blobs: &Path) -> Result<Study, String> {
+    read_db(path, blobs).map_err(|e| format!("Could not open study: {e}"))
 }
 
 enum LoadError {
     Db(rusqlite::Error),
     Format(String),
+    Io(std::io::Error),
+}
+
+impl From<std::io::Error> for LoadError {
+    fn from(e: std::io::Error) -> Self {
+        LoadError::Io(e)
+    }
 }
 
 impl From<rusqlite::Error> for LoadError {
@@ -73,6 +88,7 @@ impl std::fmt::Display for LoadError {
         match self {
             LoadError::Db(e) => write!(f, "{e}"),
             LoadError::Format(msg) => f.write_str(msg),
+            LoadError::Io(e) => write!(f, "{e}"),
         }
     }
 }
@@ -83,7 +99,11 @@ fn tmp_path(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
-fn write_db(path: &Path, study: &Study) -> rusqlite::Result<()> {
+fn write_db(path: &Path, study: &Study, blobs: &Path) -> Result<(), String> {
+    write_db_inner(path, study, blobs).map_err(|e| e.to_string())
+}
+
+fn write_db_inner(path: &Path, study: &Study, blobs: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = Connection::open(path)?;
     conn.execute_batch(SCHEMA)?;
     let tx = conn.transaction()?;
@@ -135,12 +155,19 @@ fn write_db(path: &Path, study: &Study) -> rusqlite::Result<()> {
                 r.comments
             ])?;
         }
+
+        let mut atts = tx.prepare("INSERT INTO attachments VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")?;
+        for (i, a) in study.attachments.iter().enumerate() {
+            let data = fs::read(blobs.join(&a.id)).map_err(|e| format!("attachment \"{}\" is missing: {e}", a.name))?;
+            atts.execute(params![a.id, i, a.node_id, a.name, a.mime, a.size as i64, a.added, data])?;
+        }
     }
     tx.commit()?;
-    conn.close().map_err(|(_, e)| e)
+    conn.close().map_err(|(_, e)| e)?;
+    Ok(())
 }
 
-fn read_db(path: &Path) -> Result<Study, LoadError> {
+fn read_db(path: &Path, blobs: &Path) -> Result<Study, LoadError> {
     let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
 
     let meta = |key: &str| -> Result<String, LoadError> {
@@ -199,7 +226,31 @@ fn read_db(path: &Path) -> Result<Study, LoadError> {
         })?
         .collect::<Result<_, _>>()?;
 
-    Ok(Study { info, team, nodes, rows, categories, matrix })
+    let attachments = if version >= 3 { read_attachments(&conn, blobs)? } else { Vec::new() };
+
+    Ok(Study { info, team, nodes, rows, categories, matrix, attachments })
+}
+
+fn read_attachments(conn: &Connection, blobs: &Path) -> Result<Vec<Attachment>, LoadError> {
+    fs::create_dir_all(blobs)?;
+    let mut stmt =
+        conn.prepare("SELECT id, node_id, name, mime, size, added, data FROM attachments ORDER BY position")?;
+    let mut rows = stmt.query([])?;
+    let mut out = Vec::new();
+    while let Some(r) = rows.next()? {
+        let a = Attachment {
+            id: r.get(0)?,
+            node_id: r.get(1)?,
+            name: r.get(2)?,
+            mime: r.get(3)?,
+            size: r.get::<_, i64>(4)? as u64,
+            added: r.get(5)?,
+        };
+        let data: Vec<u8> = r.get(6)?;
+        fs::write(blobs.join(&a.id), data)?;
+        out.push(a);
+    }
+    Ok(out)
 }
 
 fn read_categories(conn: &Connection) -> Result<Vec<RiskCategory>, LoadError> {
